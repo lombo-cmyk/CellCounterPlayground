@@ -54,6 +54,28 @@ def find_cell_nucleus(img: np.ndarray):
     return filtered_boxes
 
 
+def cut_cell_nucleus(img: np.ndarray, boxes: list):
+    dominant_color = find_dominant_color(img)
+    circles = [(int(x+w/2), int(y+h/2), int((h+w)/3)) for x, y, w, h in boxes]
+    for x, y, r in circles:
+        cv2.circle(img, (x,y), r, dominant_color, -1)
+    return img
+
+
+def find_dominant_color(img: np.ndarray):
+    hist = cv2.calcHist([img], [0], None, [256], [0, 256])
+    if hist.argmax() > 5:
+        dominant_val = hist.argmax()
+    else:
+        dominant_val = 0
+        counts = 0
+        for i in range(5, len(hist)):
+            if hist[i][0] > counts:
+                dominant_val = i
+                counts = int(hist[i][0])
+    return int(dominant_val)
+
+
 def main():
     working_dir = create_directories("tmp")
     kernel = np.ones((2, 2), np.uint8)
@@ -66,12 +88,15 @@ def main():
                                          kernel)
     cv2.imwrite(f"{working_dir}binary_{image_name}.png", binary_img)
     boxes = find_cell_nucleus(binary_img)
-    for x, y, w, h in boxes:
-        cv2.rectangle(gray_img, (x, y), (x+w, y+h), (0, 0, 255), 2)
 
+    tmp_image = gray_img.copy()
+    for x, y, w, h in boxes:
+        cv2.rectangle(tmp_image, (x, y), (x+w, y+h), (0, 0, 255), 2)
     plt.imsave(f"{working_dir}nucleus_{image_name}.png",
-               cv2.cvtColor(gray_img, cv2.COLOR_BGR2RGB))
-    print(f"for: {len(boxes)}")
+               cv2.cvtColor(tmp_image, cv2.COLOR_BGR2RGB))
+
+    grey_cut_nucleus = cut_cell_nucleus(gray_img, boxes)
+    cv2.imwrite(f"{working_dir}cut_nucleus_{image_name}.png", grey_cut_nucleus)
 
 
 if __name__ == "__main__":
