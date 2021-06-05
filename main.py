@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 from datetime import datetime
+from typing import Tuple
 
 
 def create_directories(upstream_folder_name: str):
@@ -55,25 +56,56 @@ def find_cell_nucleus(img: np.ndarray):
 
 
 def cut_cell_nucleus(img: np.ndarray, boxes: list):
-    dominant_color = find_dominant_color(img)
     circles = [(int(x+w/2), int(y+h/2), int((h+w)/3)) for x, y, w, h in boxes]
     for x, y, r in circles:
-        cv2.circle(img, (x,y), r, dominant_color, -1)
+        tmp_img = cv2.circle(img, (x, y), r, 0, -1)
+        tmp_img, corners = prepare_tmp_image(x, y, r, tmp_img)
+        dominant_color = find_dominant_color(tmp_img)
+        cv2.circle(img, (x, y), r, dominant_color, -1)
+        img = blur_circle(img, corners, r)
     return img
+
+
+def prepare_tmp_image(x: int, y: int, r: int, img: np.ndarray):
+    one_height = int(img.shape[0]/100)
+    one_width = int(img.shape[1]/100)
+    corner_x = x - r
+    corner_y = y - r
+
+    x_begin = tmp if (tmp := corner_x - 7 * one_width) > 0 else (tmp := 0)
+    x_end = tmp if (tmp := corner_x + 7 * one_width) <= img.shape[1] else(
+        tmp := img.shape[1])
+    y_begin = tmp if (tmp := corner_y - 7 * one_height) > 0 else (tmp := 0)
+    y_end = tmp if (tmp := corner_y + 7 * one_height) <= img.shape[0] else(
+        tmp := img.shape[0])
+
+    new_image = img[y_begin:y_end, x_begin:x_end]
+    return new_image, (corner_x, corner_y)
 
 
 def find_dominant_color(img: np.ndarray):
     hist = cv2.calcHist([img], [0], None, [256], [0, 256])
-    if hist.argmax() > 5:
+    non_black_index = 20
+    if hist.argmax() > non_black_index:
         dominant_val = hist.argmax()
     else:
         dominant_val = 0
         counts = 0
-        for i in range(5, len(hist)):
+        for i in range(non_black_index, len(hist)):
             if hist[i][0] > counts:
                 dominant_val = i
                 counts = int(hist[i][0])
     return int(dominant_val)
+
+
+def blur_circle(img: np.ndarray, corners: Tuple[int, int], r: int):
+    x = corners[0]
+    y = corners[1]
+    length = 2 * r
+    image_to_blur = img[y:y+length, x:x+length]
+    image_to_blur = cv2.bilateralFilter(image_to_blur, 9, 75, 75)
+    img[y:y+length, x:x+length] = image_to_blur
+    return img
 
 
 def main():
@@ -97,11 +129,10 @@ def main():
 
     grey_cut_nucleus = cut_cell_nucleus(gray_img, boxes)
     cv2.imwrite(f"{working_dir}cut_nucleus_{image_name}.png", grey_cut_nucleus)
-    grey_cut_nucleus = cv2.GaussianBlur(grey_cut_nucleus, (3, 3), 0)
-    edges = cv2.Canny(grey_cut_nucleus, 20, 80)
-    cv2.imwrite("Wiki_2.png", ~edges)
-    cv2.waitKey()
-
+    gaus = cv2.GaussianBlur(grey_cut_nucleus, (3, 3), 0)
+    edges_0 = cv2.Canny(gaus, 20, 80)
+    plt.imshow(~edges_0, cmap='gray')
+    plt.show()
 
 if __name__ == "__main__":
     main()
