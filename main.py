@@ -97,6 +97,10 @@ def main():
 
     grey_cut_nucleus = cut_cell_nucleus(gray_img, boxes)
     cv2.imwrite(f"{working_dir}cut_nucleus_{image_name}.png", grey_cut_nucleus)
+    grey_cut_nucleus = cv2.GaussianBlur(grey_cut_nucleus, (3, 3), 0)
+    edges = cv2.Canny(grey_cut_nucleus, 20, 80)
+    cv2.imwrite("Wiki_2.png", ~edges)
+    cv2.waitKey()
 
 
 if __name__ == "__main__":
