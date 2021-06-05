@@ -133,3 +133,4 @@ dmypy.json
 
 # data folder
 raw_data/
+tmp/
