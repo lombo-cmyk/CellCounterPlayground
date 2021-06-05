@@ -69,15 +69,15 @@ def cut_cell_nucleus(img: np.ndarray, boxes: list):
 def prepare_tmp_image(x: int, y: int, r: int, img: np.ndarray):
     one_height = int(img.shape[0]/100)
     one_width = int(img.shape[1]/100)
-    corner_x = x - r
-    corner_y = y - r
+    corner_x = tmp if (tmp := x - r) >= 0 else 0
+    corner_y = tmp if (tmp := y - r) >= 0 else 0
 
-    x_begin = tmp if (tmp := corner_x - 7 * one_width) > 0 else (tmp := 0)
-    x_end = tmp if (tmp := corner_x + 7 * one_width) <= img.shape[1] else(
-        tmp := img.shape[1])
-    y_begin = tmp if (tmp := corner_y - 7 * one_height) > 0 else (tmp := 0)
-    y_end = tmp if (tmp := corner_y + 7 * one_height) <= img.shape[0] else(
-        tmp := img.shape[0])
+    x_begin = tmp if (tmp := corner_x - 7 * one_width) > 0 else 0
+    x_end = tmp if (tmp := corner_x + 7 * one_width) <= img.shape[1] else \
+        img.shape[1]
+    y_begin = tmp if (tmp := corner_y - 7 * one_height) > 0 else 0
+    y_end = tmp if (tmp := corner_y + 7 * one_height) <= img.shape[0] else \
+        img.shape[0]
 
     new_image = img[y_begin:y_end, x_begin:x_end]
     return new_image, (corner_x, corner_y)
@@ -108,6 +108,23 @@ def blur_circle(img: np.ndarray, corners: Tuple[int, int], r: int):
     return img
 
 
+def process_edges(img: np.ndarray):
+    kernel = np.ones((2, 2), np.uint8)
+    cv2.dilate(img, kernel, iterations=1)
+    norm_one_percent_height = img.shape[0]/100
+    norm_one_percent_width = img.shape[1]/100
+    _, _, boxes, _ = cv2.connectedComponentsWithStats(img)
+    boxes = boxes[1:]
+    filtered_boxes = []
+    for x, y, w, h, pixels in boxes:
+        if h < 3 * norm_one_percent_height and w < 3 * norm_one_percent_width:
+            if 0.5 < h / w < 1.5:
+                filtered_boxes.append((x, y, w, h))
+    for x, y, w, h in filtered_boxes:
+        cv2.rectangle(img, (x, y), (x+w, y+h), 0, -1)
+    return img
+
+
 def main():
     working_dir = create_directories("tmp")
     kernel = np.ones((2, 2), np.uint8)
@@ -130,9 +147,21 @@ def main():
     grey_cut_nucleus = cut_cell_nucleus(gray_img, boxes)
     cv2.imwrite(f"{working_dir}cut_nucleus_{image_name}.png", grey_cut_nucleus)
     gaus = cv2.GaussianBlur(grey_cut_nucleus, (3, 3), 0)
-    edges_0 = cv2.Canny(gaus, 20, 80)
-    plt.imshow(~edges_0, cmap='gray')
-    plt.show()
+    edges_0 = cv2.Canny(gaus, 45, 70)
+    cv2.imwrite(f"{working_dir}edges_raw_{image_name}.png", edges_0)
+    cv2.imwrite(f"{working_dir}edges_reversed_{image_name}.png", ~edges_0)
+
+    processed_edges = process_edges(edges_0)
+    processed_edges = cv2.dilate(processed_edges, kernel, iterations=2)
+    # needs about 6 iterations in full scale
+    processed_edges = process_edges(processed_edges)
+    cv2.imwrite(f"{working_dir}edges_processed_{image_name}.png",
+                processed_edges)
+    cv2.imwrite(f"{working_dir}edges_processed_reversed_{image_name}.png",
+                ~processed_edges)
+# https://stackoverflow.com/questions/57813137/how-to-use-watershed
+# -segmentation-in-opencv-python might help in future
+
 
 if __name__ == "__main__":
     main()
