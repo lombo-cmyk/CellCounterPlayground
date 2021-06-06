@@ -109,8 +109,6 @@ def blur_circle(img: np.ndarray, corners: Tuple[int, int], r: int):
 
 
 def process_edges(img: np.ndarray):
-    kernel = np.ones((2, 2), np.uint8)
-    cv2.dilate(img, kernel, iterations=1)
     norm_one_percent_height = img.shape[0]/100
     norm_one_percent_width = img.shape[1]/100
     _, _, boxes, _ = cv2.connectedComponentsWithStats(img)
@@ -146,19 +144,23 @@ def main():
 
     grey_cut_nucleus = cut_cell_nucleus(gray_img, boxes)
     cv2.imwrite(f"{working_dir}cut_nucleus_{image_name}.png", grey_cut_nucleus)
-    gaus = cv2.GaussianBlur(grey_cut_nucleus, (3, 3), 0)
-    edges_0 = cv2.Canny(gaus, 45, 70)
-    cv2.imwrite(f"{working_dir}edges_raw_{image_name}.png", edges_0)
-    cv2.imwrite(f"{working_dir}edges_reversed_{image_name}.png", ~edges_0)
+    _, binary_img = cv2.threshold(grey_cut_nucleus, 140, 255,
+                                  cv2.THRESH_BINARY)
+    eroded = cv2.erode(binary_img, kernel, 1)
+    edges_0 = ~process_edges(~eroded)
+    edges_0 = cv2.erode(edges_0, kernel, 1)
+    cv2.imwrite(f"{working_dir}edges_{image_name}.png", edges_0)
+    # might be worth considering:
+    # tmp = edges_0.copy()
+    # cnts = cv2.findContours(tmp, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # cnts = cnts[0] if len(cnts) == 2 else cnts[1]
+    # tmp = cv2.cvtColor(tmp, cv2.COLOR_GRAY2RGB)
+    # for c in cnts:
+    #     area = cv2.contourArea(c)
+    #     if area > 3000:
+    #         cv2.drawContours(tmp, [c], 0, (0, 0, 255), 2)
 
-    processed_edges = process_edges(edges_0)
-    processed_edges = cv2.dilate(processed_edges, kernel, iterations=2)
-    # needs about 6 iterations in full scale
-    processed_edges = process_edges(processed_edges)
-    cv2.imwrite(f"{working_dir}edges_processed_{image_name}.png",
-                processed_edges)
-    cv2.imwrite(f"{working_dir}edges_processed_reversed_{image_name}.png",
-                ~processed_edges)
+
 # https://stackoverflow.com/questions/57813137/how-to-use-watershed
 # -segmentation-in-opencv-python might help in future
 
